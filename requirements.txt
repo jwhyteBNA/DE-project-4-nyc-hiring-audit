@@ -14,3 +14,4 @@ pyarrow
 polars
 requests
 openpyxl
+xlrd

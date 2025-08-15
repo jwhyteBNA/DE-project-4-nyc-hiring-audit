@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *.class
 
+#Temporary files
+*.tmp
+*.bak
+
 # Virtual environment
 venv/
 
@@ -38,3 +42,21 @@ dbt/nyc_audit/profiles.yml
 airflow.db
 airflow.cfg
 airflow-webserver.pid
+
+#Devcontainer artifacts
+.devcontainer
+*.tar
+*.tar.xz
+*.tar.gz
+
+#Files and temp files
+*.parquet
+*.csv
+*.xlsx
+*.xls
+data/
+
+#Logs
+logs/
+*.log
+src/logs/
