@@ -1,0 +1,60 @@
+
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow:
+    build:
+    context: .
+    dockerfile: Dockerfile.airflow
+    image: my-airflow-with-data
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: "YOUR_FERNET_KEY"
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW_VAR_SNOWFLAKE_ACCOUNT: ${AIRFLOW_VAR_SNOWFLAKE_ACCOUNT}
+      AIRFLOW_VAR_SNOWFLAKE_USER: ${AIRFLOW_VAR_SNOWFLAKE_USER}
+      AIRFLOW_VAR_SNOWFLAKE_PASSWORD: ${AIRFLOW_VAR_SNOWFLAKE_PASSWORD}
+      AIRFLOW_VAR_SNOWFLAKE_ROLE: ${AIRFLOW_VAR_SNOWFLAKE_ROLE}
+      AIRFLOW_VAR_SNOWFLAKE_WAREHOUSE: ${AIRFLOW_VAR_SNOWFLAKE_WAREHOUSE}
+      AIRFLOW_VAR_SNOWFLAKE_DATABASE: ${AIRFLOW_VAR_SNOWFLAKE_DATABASE}
+      AIRFLOW_VAR_SNOWFLAKE_SCHEMA_RAW: RAW
+      DBT_PROFILES_DIR: /opt/airflow/dbt_project/
+    volumes:
+      - ./dags:/opt/airflow/dags:rw
+      - ./logs:/opt/airflow/logs:rw
+      - ./config:/opt/airflow/config:rw
+      - ./data:/opt/airflow/data:rw
+      - ./dbt_project:/opt/airflow/dbt_project:rw
+      - ./gx_validation:/opt/airflow/gx_validation:rw
+      - airflow_data:/opt/airflow/data
+      - ./scripts:/opt/airflow/scripts:rw
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "
+      echo 'Starting Airflow services...' &&
+      airflow webserver --port 8080 --daemon &&
+      echo 'Webserver started, starting scheduler...' &&
+      airflow scheduler
+      "
+
+volumes:
+  airflow_data: 
+  db_data:      
