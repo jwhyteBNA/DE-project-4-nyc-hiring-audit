@@ -1,5 +1,4 @@
 import os
-import re
 import logging 
 import pandas as pd
 import polars as pl
@@ -41,8 +40,8 @@ logger.info("Logger initialized for connection module.")
 def strip_timestamp_and_extension(filename: str) -> str:
     base = os.path.basename(filename)
     parts = base.split('_')
-    if len(parts) > 4:
-        return '_'.join(parts[:-4])
+    if len(parts) > 6:
+        return '_'.join(parts[:-6])
     else:
         return base.replace('.parquet', '')
 
