@@ -31,12 +31,12 @@ XLS_FILEPATH = os.getenv('XLS_PATH')
 
 PAYROLL_SCHEMA = {
     "fiscal_year": pl.Int64,
-    "payroll_number": pl.Float64,  # or pl.Int64 if always integer
+    "payroll_number": pl.Float64,
     "agency_name": pl.Utf8,
     "last_name": pl.Utf8,
     "first_name": pl.Utf8,
     "mid_init": pl.Utf8,
-    "agency_start_date": pl.Utf8,  # or pl.Date if you parse dates
+    "agency_start_date": pl.Utf8,  
     "work_location_borough": pl.Utf8,
     "title_description": pl.Utf8,
     "leave_status_as_of_june_30": pl.Utf8,
@@ -85,7 +85,7 @@ def get_annual_payroll_data_streaming(url):
     timestamp = datetime.now().strftime("%Y_%m_%d_%H:%M:%S")
     limit=50000
     offset = 0
-    parquet_path = f"annual_payroll_streaming_{timestamp}.parquet"
+    parquet_path = f"annual_payroll_{timestamp}.parquet"
     writer = None
 
     while True:
