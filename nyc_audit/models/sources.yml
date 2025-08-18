@@ -1,0 +1,89 @@
+version: 2
+
+sources:
+  - name: NYC_JOBS
+    database: NYCAUDIT_DB
+    schema: BRONZE    
+    tables:
+      - name: ANNUAL_PAYROLL
+        description: "Annual payroll data for NYC jobs"
+        columns:
+          - name: "work_location_borough "
+            description: "borough"
+            tests:
+              - not_null
+          - name: "base_salary"
+            description: "Base salary for the job"
+            tests:
+              - not_null
+          - name: "pay_basis"
+            description: "Basis of pay for the job"
+            tests:
+              - not_null
+
+
+      - name: TOP_POSTED_TITLES
+        description: "Canadian COVID-19 testing data"
+        columns:
+          - name: REF_DATE
+            description: "Reference date"
+            tests:
+              - not_null
+          - name: GEO
+            description: "Geographic location"
+            tests:
+              - not_null
+          - name: DGUID
+            description: "Dissemination geography unique identifier"
+          - name: CHARACTERISTICS
+            description: "Testing characteristics"
+          - name: VALUE
+            description: "Test count or rate"
+          - name: UOM_ID
+            description: "Unit of measure identifier"
+          - name: VECTOR
+            description: "Unique vector identifier"
+            tests:
+              - not_null
+              - unique
+      - name: WEEKLY_JOBS
+        description: "US COVID-19 data from CDC"
+        columns:
+          - name: DATA_AS_OF
+            description: "Data collection date"
+            tests:
+              - not_null
+          - name: JURISDICTION_RESIDENCE
+            description: "State or jurisdiction"
+            tests:
+              - not_null
+          - name: DATA_PERIOD_START
+            description: "Start of data period"
+          - name: DATA_PERIOD_END
+            description: "End of data period"
+          - name: "GROUP"
+            description: "Demographic group"
+          - name: SUBGROUP1
+            description: "First subgroup classification"
+          - name: SUBGROUP2
+            description: "Second subgroup classification"
+          - name: COVID_DEATHS
+            description: "Number of COVID deaths"
+          - name: CRUDE_COVID_RATE
+            description: "Crude COVID rate"
+          - name: AA_COVID_RATE
+            description: "Age-adjusted COVID rate"
+          - name: CRUDE_COVID_RATE_ANN
+            description: "Annualized crude COVID rate"
+          - name: AA_COVID_RATE_ANN
+            description: "Annualized age-adjusted COVID rate"
+          - name: FOOTNOTE
+            description: "Additional notes"
+
+  - name: CLEANED_DATA
+    database: PROJECT3_DB
+    schema: SILVER
+    tables:
+      - name: SILVER_CA_ANTIBODY
+      - name: SILVER_CA_COVID_TESTS
+      - name: SILVER_US_COVID_TESTS

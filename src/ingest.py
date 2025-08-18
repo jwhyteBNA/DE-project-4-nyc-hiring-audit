@@ -7,12 +7,10 @@ import pandas as pd
 import polars as pl
 from io import BytesIO
 from minio import Minio
-import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
@@ -82,17 +80,19 @@ def get_weekly_jobs_data(url):
 
 
 def get_annual_payroll_data_streaming(url):
-    timestamp = datetime.now().strftime("%Y_%m_%d_%H:%M:%S")
-    limit=50000
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    total_rows=150000
+    limit = 50000
     offset = 0
-    parquet_path = f"annual_payroll_{timestamp}.parquet"
+    rows_downloaded = 0
+    parquet_path = f"ANNUAL_PAYROLL_{timestamp}.parquet"
     writer = None
 
-    while True:
+    while rows_downloaded < total_rows:
         params = {"$limit": limit, "$offset": offset}
         response = requests.get(url, params=params)
         if response.status_code == 200:
-            batch_df = pl.read_csv(BytesIO(response.content), dtypes=PAYROLL_SCHEMA)
+            batch_df = pl.read_csv(BytesIO(response.content), schema_overrides=PAYROLL_SCHEMA)
             batch_df = batch_df.with_columns([
                 pl.col("payroll_number").cast(pl.Float64),  
                 pl.col("regular_hours").cast(pl.Float64),
@@ -103,20 +103,22 @@ def get_annual_payroll_data_streaming(url):
                 pl.col("total_other_pay").cast(pl.Float64)
             ])
             if batch_df.shape[0] == 0:
-                break 
-            logger.info(f"Fetched batch at offset {offset}")
+                break
+            if rows_downloaded + batch_df.shape[0] > total_rows:
+                batch_df = batch_df.head(total_rows - rows_downloaded)
             table = batch_df.to_arrow()
             if writer is None:
                 writer = pq.ParquetWriter(parquet_path, table.schema)
             writer.write_table(table)
+            rows_downloaded += batch_df.shape[0]
             offset += limit
         else:
-            logger.error(f"Failed to fetch batch at offset {offset}: {response.status_code}")
+            logger.error(f"Failed to fetch batch: {response.status_code}")
             break
 
     if writer:
         writer.close()
-        logger.info(f"Finished writing all batches to {parquet_path}")
+        logger.info(f"Finished writing {rows_downloaded} rows to {parquet_path}")
         with open(parquet_path, "rb") as f:
             minio_client.put_object(
                 MINIO_BUCKET_NAME,
@@ -131,23 +133,20 @@ def get_annual_payroll_data_streaming(url):
 
 
 def extract_and_upload_xls_tabs(filepath):
-    logger.info(f"Extracting tabs 4 and 5 from {filepath}")
+    logger.info(f"Extracting tab 16 from {filepath}")
     try:
-        tab4_data = pd.read_excel(filepath, sheet_name=3, header=5, usecols="A:B")
-        tab4_pl = pl.from_pandas(tab4_data)
+        tab16_data = pd.read_excel(filepath, sheet_name=15, header=2, usecols="A:D")
+        tab16_pl = pl.from_pandas(tab16_data)
 
-        tab5_data = pd.read_excel(filepath, sheet_name=4, header=2, usecols="A:C")
-        tab5_pl = pl.from_pandas(tab5_data)
-
-        logger.info("Successfully extracted tabs 4 and 5.")
-        return tab4_pl, tab5_pl
+        logger.info("Successfully extracted tab 16.")
+        return tab16_pl
     except Exception as e:
         logger.error(f"Failed to read tabs from {filepath}: {e}")
-        return None, None
+        return None
 
 
 def upload_parquet_to_minio(parquet: pl.DataFrame, filename: str):
-    timestamp = datetime.now().strftime("%Y_%m_%d_%H:%M:%S")
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     timestamped_filename = f"{filename.rstrip('.parquet')}_{timestamp}.parquet"
     buffer = BytesIO()
     parquet.write_parquet(buffer)
@@ -165,13 +164,11 @@ def upload_parquet_to_minio(parquet: pl.DataFrame, filename: str):
 
 def main():
     weekly_data = timed_ingestion(get_weekly_jobs_data, WEEKLY_JOBS_URL)
-    upload_parquet_to_minio(weekly_data, "weekly_jobs.parquet")
+    upload_parquet_to_minio(weekly_data, "WEEKLY_JOBS.parquet")
 
-    tab4_pl, tab5_pl = timed_ingestion(extract_and_upload_xls_tabs, XLS_FILEPATH)
-    if tab4_pl is not None:
-        upload_parquet_to_minio(tab4_pl, "advert_salary.parquet")
-    if tab5_pl is not None:
-        upload_parquet_to_minio(tab5_pl, "advert_salary_trends.parquet")
+    tab16_pl = timed_ingestion(extract_and_upload_xls_tabs, XLS_FILEPATH)
+    if tab16_pl is not None:
+        upload_parquet_to_minio(tab16_pl, "TOP_POSTED_TITLES.parquet")
 
     timed_ingestion(get_annual_payroll_data_streaming, ANNUAL_PAYROLL_URL)
    

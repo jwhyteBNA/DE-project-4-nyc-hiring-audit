@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: CLEANED_TOP_TITLES
+    description: "Cleaned top posted job titles with posting statistics and median posting duration in days."
+    columns:
+      - name: ID
+        description: "Unique identifier for each row."
+        tests:
+          - unique
+          - not_null
+      - name: JOB_TITLE
+        description: "Job title for the posting."
+        tests:
+          - not_null
+      - name: TOTAL_POSTINGS
+        description: "Total number of postings for the job title between Jan 2024 and Jun 2025."
+        tests:
+          - not_null
+      - name: UNIQUE_POSTINGS
+        description: "Number of unique postings for the job title between Jan 2024 and Jun 2025."
+        tests:
+          - not_null
+      - name: MEDIAN_POSTING_DURATION_DAYS
+        description: "Median posting duration in days for the job title."
+        tests:
+          - not_null
