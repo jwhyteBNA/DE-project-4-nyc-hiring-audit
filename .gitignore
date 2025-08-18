@@ -36,7 +36,7 @@ var/
 .env
 
 # .yml profile file
-dbt/nyc_audit/profiles.yml
+nyc_audit/dbt_project.yml
 
 #Airflow
 airflow.db
@@ -60,3 +60,5 @@ data/
 logs/
 *.log
 src/logs/
+
+profiles.yml
