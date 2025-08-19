@@ -4,7 +4,7 @@
 ) }}
 
 SELECT
-    ROW_NUMBER() OVER (ORDER BY VECTOR) AS ID,
+    ROW_NUMBER() OVER (ORDER BY "Job Title") AS ID,
     "Job Title" AS JOB_TITLE,
     "Total Postings (Jan 2024 - Jun 2025)" AS TOTAL_POSTINGS,
     "Unique Postings (Jan 2024 - Jun 2025)" AS UNIQUE_POSTINGS,

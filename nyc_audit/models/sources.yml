@@ -8,12 +8,12 @@ sources:
       - name: ANNUAL_PAYROLL
         description: "Annual payroll data for NYC jobs"
         columns:
-          - name: "work_location_borough "
-            description: "borough"
+          - name: "agency"
+            description: "Agency name"
             tests:
               - not_null
           - name: "base_salary"
-            description: "Base salary for the job"
+            description: "Minimum salary for the job"
             tests:
               - not_null
           - name: "pay_basis"
@@ -23,67 +23,37 @@ sources:
 
 
       - name: TOP_POSTED_TITLES
-        description: "Canadian COVID-19 testing data"
+        description: "List of top job titles in postings"
         columns:
-          - name: REF_DATE
-            description: "Reference date"
+          - name: "Job Title"
+            description: "Titles of Jobs"
             tests:
               - not_null
-          - name: GEO
-            description: "Geographic location"
+          - name: Unique Postings (Jan 2024 - Jun 2025)
+            description: "Number of Postings"
             tests:
               - not_null
-          - name: DGUID
-            description: "Dissemination geography unique identifier"
-          - name: CHARACTERISTICS
-            description: "Testing characteristics"
-          - name: VALUE
-            description: "Test count or rate"
-          - name: UOM_ID
-            description: "Unit of measure identifier"
-          - name: VECTOR
-            description: "Unique vector identifier"
-            tests:
-              - not_null
-              - unique
+
       - name: WEEKLY_JOBS
-        description: "US COVID-19 data from CDC"
+        description: "Weekly job postings data"
         columns:
-          - name: DATA_AS_OF
-            description: "Data collection date"
+          - name: "agency"
+            description: "Agency name"
             tests:
               - not_null
-          - name: JURISDICTION_RESIDENCE
-            description: "State or jurisdiction"
+          - name: "civil_service_title"
+            description: "Standardized Job Title"
             tests:
               - not_null
-          - name: DATA_PERIOD_START
-            description: "Start of data period"
-          - name: DATA_PERIOD_END
-            description: "End of data period"
-          - name: "GROUP"
-            description: "Demographic group"
-          - name: SUBGROUP1
-            description: "First subgroup classification"
-          - name: SUBGROUP2
-            description: "Second subgroup classification"
-          - name: COVID_DEATHS
-            description: "Number of COVID deaths"
-          - name: CRUDE_COVID_RATE
-            description: "Crude COVID rate"
-          - name: AA_COVID_RATE
-            description: "Age-adjusted COVID rate"
-          - name: CRUDE_COVID_RATE_ANN
-            description: "Annualized crude COVID rate"
-          - name: AA_COVID_RATE_ANN
-            description: "Annualized age-adjusted COVID rate"
-          - name: FOOTNOTE
-            description: "Additional notes"
+          - name: "salary_frequency"
+            description: "Frequency of salary payments"
+            tests:
+              - not_null
 
   - name: CLEANED_DATA
-    database: PROJECT3_DB
+    database: NYCAUDIT_DB
     schema: SILVER
     tables:
-      - name: SILVER_CA_ANTIBODY
-      - name: SILVER_CA_COVID_TESTS
-      - name: SILVER_US_COVID_TESTS
+      - name: CLEANED_PAYROLL
+      - name: CLEANED_TOP_TITLES
+      - name: CLEANED_WEEKLY_JOBS
