@@ -1,6 +1,51 @@
 version: 2
 
 models:
+  - name: CLEANED_WEEKLY_JOBS
+    description: "Cleaned weekly jobs data with normalized salary and posting dates."
+    columns:
+      - name: ID
+        description: "Unique identifier for each row."
+        tests:
+          - unique
+          - not_null
+      - name: AGENCY
+        description: "Agency posting the job."
+        tests:
+          - not_null
+      - name: BUSINESS_TITLE
+        description: "Business title for the job posting."
+        tests:
+          - not_null
+      - name: CIVIL_SERVICE_TITLE
+        description: "Civil service title for the job posting."
+        tests:
+          - not_null
+      - name: JOB_CATEGORY
+        description: "Job category for the posting."
+        tests:
+          - not_null
+      - name: PAYROLL_SALARY_MIN
+        description: "Minimum salary for the job posting."
+        tests:
+          - not_null
+      - name: PAYROLL_SALARY_MAX
+        description: "Maximum salary for the job posting."
+        tests:
+          - not_null
+      - name: SALARY_FREQUENCY
+        description: "Salary frequency (e.g., annual, hourly)."
+        tests:
+          - not_null
+      - name: POSTING_DATE_NORM
+        description: "Normalized posting date."
+        tests:
+          - not_null
+      - name: POST_UNTIL_NORM
+        description: "Normalized post until date; if missing, set to 30 days after posting."
+        tests:
+          - not_null
+
   - name: CLEANED_TOP_TITLES
     description: "Cleaned top posted job titles with posting statistics and median posting duration in days."
     columns:
@@ -23,5 +68,36 @@ models:
           - not_null
       - name: MEDIAN_POSTING_DURATION_DAYS
         description: "Median posting duration in days for the job title."
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "MEDIAN_POSTING_DURATION_DAYS != 0"
+
+  - name: CLEANED_PAYROLL
+    description: "Cleaned annual payroll data with annualized salary calculations."
+    columns:
+      - name: ID
+        description: "Unique identifier for each row."
+        tests:
+          - unique
+          - not_null
+      - name: AGENCY_NAME
+        description: "Name of the agency for the payroll record."
+        tests:
+          - not_null
+      - name: AGENCY_START_DATE
+        description: "Start date for the agency employment."
+        tests:
+          - not_null
+      - name: TITLE_DESCRIPTION
+        description: "Description of the job title."
+        tests:
+          - not_null
+      - name: ANNUALIZED_SALARY
+        description: "Annualized salary; hourly rates multiplied by 2,080, salary rates unchanged."
+        tests:
+          - not_null
+      - name: PAY_BASIS
+        description: "Basis of pay (e.g., hourly, salary)."
         tests:
           - not_null
