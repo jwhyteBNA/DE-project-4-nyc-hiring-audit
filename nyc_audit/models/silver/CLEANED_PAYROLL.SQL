@@ -5,6 +5,7 @@
 
 SELECT
     ROW_NUMBER() OVER (ORDER BY "agency_name") AS ID,
+    "fiscal_year" AS FISCAL_YEAR,
     "agency_name" AS AGENCY_NAME,
     "agency_start_date" AS AGENCY_START_DATE,
     "title_description" AS TITLE_DESCRIPTION,

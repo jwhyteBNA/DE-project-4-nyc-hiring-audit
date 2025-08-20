@@ -16,7 +16,7 @@ from snowflake.connector.pandas_tools import write_pandas
 load_dotenv()
 
 VS_CODE_WORKSPACE_FOLDER = os.getenv('VS_CODE_WORKSPACE_FOLDER')
-LOG_DIR = os.path.join(VS_CODE_WORKSPACE_FOLDER, 'src/logs')
+LOG_DIR = os.path.join(VS_CODE_WORKSPACE_FOLDER)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 LOG_FILE = os.path.join(LOG_DIR, 'connection.log')
