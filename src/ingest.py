@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import logging
 import requests
 import numpy as np
@@ -68,32 +69,68 @@ def timed_ingestion(func, *args, **kwargs):
     return result
 
 
-def get_weekly_jobs_data(url):
-    response = requests.get(WEEKLY_JOBS_URL)
-    if response.status_code == 200:
-        logger.info("Weekly jobs data fetched successfully.")
-        weekly_data = pl.read_csv(BytesIO(response.content))
-        return weekly_data
+def get_api_last_updated(meta_url):
+    meta = requests.get(meta_url).json()
+    last_updated = meta.get("rowsUpdatedAt")
+    if last_updated:
+        return datetime.fromtimestamp(last_updated)
+    return None
+
+def get_last_ingest_time(filepath):
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            return datetime.fromisoformat(f.read().strip())
+    return None
+
+def set_last_ingest_time(dt, filepath):
+    with open(filepath, "w") as f:
+        f.write(dt.isoformat())
+
+
+def conditional_ingest(api_name, meta_url, ingest_func, ingest_args, stamp_file):
+    api_last_updated = get_api_last_updated(meta_url)
+    last_ingest = get_last_ingest_time(stamp_file)
+    if last_ingest is None or (api_last_updated and api_last_updated > last_ingest):
+        logger.info(f"{api_name} data is new. Running ingestion.")
+        timed_ingestion(ingest_func, *ingest_args)
+        set_last_ingest_time(api_last_updated, stamp_file)
     else:
-        logger.error(f"Failed to fetch weekly jobs data: {response.status_code}")
-        return pl.DataFrame()
+        logger.info(f"No new {api_name} data to ingest.")
+
+def get_weekly_jobs_data(url, limit=1000):
+    offset = 0
+    all_data = []
+    while True:
+        response = requests.get(WEEKLY_JOBS_URL, params={"$limit": limit, "$offset": offset})
+        if response.status_code == 200:
+            logger.info("Weekly jobs data fetched successfully.")
+            weekly_data = pl.read_csv(BytesIO(response.content))
+            all_data.append(weekly_data)
+            if weekly_data.shape[0] < limit:
+                break
+            offset += limit
+        else:
+            logger.error(f"Failed to fetch weekly jobs data: {response.status_code}")
+            break
+    return pl.concat(all_data) if all_data else pl.DataFrame()
 
 
 def get_annual_payroll_data_streaming(url):
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    total_rows=150000
     limit = 50000
     offset = 0
-    rows_downloaded = 0
     parquet_path = f"ANNUAL_PAYROLL_{timestamp}.parquet"
     writer = None
+    rows_downloaded = 0
 
-    while rows_downloaded < total_rows:
+    while True:
+        logger.info(f"Requesting rows {offset} to {offset + limit} from API...")
         params = {"$limit": limit, "$offset": offset}
         response = requests.get(url, params=params)
         if response.status_code == 200:
-            batch_df = pl.read_csv(BytesIO(response.content), schema_overrides=PAYROLL_SCHEMA)
-            batch_df = batch_df.with_columns([
+            batch_data = pl.read_csv(BytesIO(response.content), schema_overrides=PAYROLL_SCHEMA)
+            logger.info(f"Fetched {batch_data.shape[0]} rows in this batch.")
+            batch_data = batch_data.with_columns([
                 pl.col("payroll_number").cast(pl.Float64),  
                 pl.col("regular_hours").cast(pl.Float64),
                 pl.col("ot_hours").cast(pl.Float64),
@@ -102,15 +139,13 @@ def get_annual_payroll_data_streaming(url):
                 pl.col("total_ot_paid").cast(pl.Float64),
                 pl.col("total_other_pay").cast(pl.Float64)
             ])
-            if batch_df.shape[0] == 0:
+            if batch_data.shape[0] == 0:
                 break
-            if rows_downloaded + batch_df.shape[0] > total_rows:
-                batch_df = batch_df.head(total_rows - rows_downloaded)
-            table = batch_df.to_arrow()
+            table = batch_data.to_arrow()
             if writer is None:
                 writer = pq.ParquetWriter(parquet_path, table.schema)
             writer.write_table(table)
-            rows_downloaded += batch_df.shape[0]
+            rows_downloaded += batch_data.shape[0]
             offset += limit
         else:
             logger.error(f"Failed to fetch batch: {response.status_code}")
@@ -133,13 +168,13 @@ def get_annual_payroll_data_streaming(url):
 
 
 def extract_and_upload_xls_tabs(filepath):
-    logger.info(f"Extracting tab 16 from {filepath}")
+    logger.info(f"Extracting tab 'Job Postings Job Titles' from {filepath}")
     try:
-        tab16_data = pd.read_excel(filepath, sheet_name=15, header=2, usecols="A:D")
-        tab16_pl = pl.from_pandas(tab16_data)
+        xls_data = pd.read_excel(filepath, sheet_name="Job Postings Job Titles", header=2, usecols="A:D")
+        xls_polars = pl.from_pandas(xls_data)
 
-        logger.info("Successfully extracted tab 16.")
-        return tab16_pl
+        logger.info("Successfully extracted tab 'Job Postings Job Titles'.")
+        return xls_polars
     except Exception as e:
         logger.error(f"Failed to read tabs from {filepath}: {e}")
         return None
@@ -163,14 +198,29 @@ def upload_parquet_to_minio(parquet: pl.DataFrame, filename: str):
 
 
 def main():
-    weekly_data = timed_ingestion(get_weekly_jobs_data, WEEKLY_JOBS_URL)
-    upload_parquet_to_minio(weekly_data, "WEEKLY_JOBS.parquet")
+ # Metadata endpoints for Socrata APIs
+    WEEKLY_META_URL = os.getenv('WEEKLY_META_URL')
+    PAYROLL_META_URL = os.getenv('PAYROLL_META_URL')
 
-    tab16_pl = timed_ingestion(extract_and_upload_xls_tabs, XLS_FILEPATH)
-    if tab16_pl is not None:
-        upload_parquet_to_minio(tab16_pl, "TOP_POSTED_TITLES.parquet")
+    conditional_ingest(
+        "Weekly Jobs",
+        WEEKLY_META_URL,
+        get_weekly_jobs_data,
+        [WEEKLY_JOBS_URL],
+        "ingest_stamps/weekly_jobs_last_ingest.txt"
+    )
+    conditional_ingest(
+        "Annual Payroll",
+        PAYROLL_META_URL,
+        get_annual_payroll_data_streaming,
+        [ANNUAL_PAYROLL_URL],
+        "ingest_stamps/annual_payroll_last_ingest.txt"
+    )
 
-    timed_ingestion(get_annual_payroll_data_streaming, ANNUAL_PAYROLL_URL)
+    top_jobs_data = timed_ingestion(extract_and_upload_xls_tabs, XLS_FILEPATH)
+    if top_jobs_data is not None:
+        upload_parquet_to_minio(top_jobs_data, "TOP_POSTED_TITLES.parquet")
+
    
 
 if __name__ == "__main__":
