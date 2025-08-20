@@ -45,30 +45,7 @@ def strip_timestamp_and_extension(filename: str) -> str:
     else:
         return base.replace('.parquet', '')
 
-def process_large_parquet_in_batches(parquet_bytes, obj, minio_client, conn, snowflake_db, snowflake_schema, batch_size=100000):
-    parquet_file = pq.ParquetFile(parquet_bytes)
-    table_name = strip_timestamp_and_extension(obj.object_name)
-    for batch in parquet_file.iter_batches(batch_size=batch_size):
-        batch_df = pl.from_arrow(batch)
-        batch_df = batch_df.with_columns([
-            pl.lit(obj.object_name).alias("source"),
-            pl.lit(datetime.now(timezone.utc)).alias("original_load_time")
-        ])
-        logger.info(f"Writing batch to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
-        write_pandas(
-            conn=conn,
-            df=batch_df.to_pandas(),
-            table_name=table_name,
-            database=snowflake_db,
-            schema=snowflake_schema,
-            auto_create_table=True,
-            overwrite=False,  # Don't overwrite for each batch!
-            quote_identifiers=True,
-            use_logical_type=True
-        )
-
-
-def process_minio_files(obj, minio_client, conn, snowflake_db, snowflake_schema, batch_threshold=500000):
+def process_minio_files(obj, minio_client, conn, snowflake_db, snowflake_schema, batch_threshold=150000):
     logger.info(f"Processing file: {obj.object_name} from MinIO.")
     try:
         minio_response = minio_client.get_object(obj.bucket_name, obj.object_name)
@@ -76,23 +53,45 @@ def process_minio_files(obj, minio_client, conn, snowflake_db, snowflake_schema,
         minio_response.close()
         minio_response.release_conn()
 
-        # Check file size or row count
         parquet_file = pq.ParquetFile(parquet_bytes)
         total_rows = parquet_file.metadata.num_rows
 
+        table_name = strip_timestamp_and_extension(obj.object_name)
+
         if total_rows > batch_threshold:
-            logger.info(f"File {obj.object_name} is large ({total_rows} rows), processing in batches.")
-            process_large_parquet_in_batches(parquet_bytes, obj, minio_client, conn, snowflake_db, snowflake_schema)
-            return
+            logger.info(f"File {obj.object_name} is large ({total_rows} rows), processing first 150,000 rows in batches.")
+            try:
+                first_batch = next(parquet_file.iter_batches(batch_size=batch_threshold))
+                batch_large_data = pl.from_arrow(first_batch).with_columns([
+                    pl.lit(obj.object_name).alias("source"),
+                    pl.lit(datetime.now(timezone.utc)).alias("original_load_time")
+                ])
+                logger.info(f"Writing batch to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
+                success, nchunks, nrows, _ = write_pandas(
+                    conn=conn,
+                    df=batch_large_data.to_pandas(),
+                    table_name=table_name,
+                    database=snowflake_db,
+                    schema=snowflake_schema,
+                    auto_create_table=True,
+                    overwrite=True,
+                    quote_identifiers=True,
+                    use_logical_type=True
+                )
+                if success:
+                    logger.info(f"Successfully wrote {nrows} rows in {nchunks} chunks to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
+                else:
+                    logger.error(f"Failed to write to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
+            except StopIteration:
+                logger.info(f"No more batches to process for file: {obj.object_name}")
         else:
-            logger.info(f"File {obj.object_name} is small ({total_rows} rows), processing normally.")
+            logger.info(f"File {obj.object_name} is small ({total_rows} rows), processing all rows.")
             data_from_minio = pl.read_parquet(parquet_bytes)
             data_from_minio = data_from_minio.with_columns([
                 pl.lit(obj.object_name).alias("source"),
                 pl.lit(datetime.now(timezone.utc)).alias("original_load_time")
             ])
-            table_name = strip_timestamp_and_extension(obj.object_name)
-            logger.info(f"Writing to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
+            logger.info(f"Writing all rows to Snowflake table: {snowflake_db}.{snowflake_schema}.{table_name}")
 
             success, nchunks, nrows, _ = write_pandas(
                 conn=conn,
