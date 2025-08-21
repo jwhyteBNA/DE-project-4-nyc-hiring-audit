@@ -92,7 +92,7 @@ def ensure_gold_table(conn, table_name, schema, columns_types):
 def fuzzy_enrich_postings(postings, payroll, min_ratio=85):
     results = []
     payroll_titles = payroll["TITLE_DESCRIPTION"].unique()
-    for row in postings.iterrows():
+    for _, row in postings.iterrows():
         business_title = row["BUSINESS_TITLE"]
         match = process.extractOne(
             business_title,
@@ -113,9 +113,9 @@ def fuzzy_enrich_postings(postings, payroll, min_ratio=85):
             "POSTING_ID": row["ID"],
             "BUSINESS_TITLE": business_title,
             "CIVIL_SERVICE_TITLE": row["CIVIL_SERVICE_TITLE"],
-            "POSTING_DURATION": row.get("POSTING_DURATION"),
             "PAYROLL_MATCHED_TITLE": matched_title,
             "MATCH_SCORE": match_score,
+            "POSTING_DURATION": row.get("POSTING_DURATION"),
             "PAYROLL_ANNUALIZED_SALARY": annualized_salary,
             "PAYROLL_SALARY_MIN_ANNUAL": row["PAYROLL_SALARY_MIN_ANNUAL"],
             "PAYROLL_SALARY_MAX_ANNUAL": row["PAYROLL_SALARY_MAX_ANNUAL"],
@@ -125,7 +125,6 @@ def fuzzy_enrich_postings(postings, payroll, min_ratio=85):
     return pd.DataFrame(results)
 
 def write_to_snowflake(conn, df, table_name, schema):
-    # Map pandas dtypes to Snowflake types
     dtype_map = {
         "int64": "NUMBER",
         "float64": "FLOAT",
@@ -143,26 +142,20 @@ def main():
     conn = get_connection()
     payroll, weekly, top = load_silver_tables(conn)
 
-    # Convert date columns to pandas datetime, handling invalid dates
     weekly["POSTING_DATE_NORM"] = pd.to_datetime(weekly["POSTING_DATE_NORM"], errors="coerce")
     weekly["POST_UNTIL_NORM"] = pd.to_datetime(weekly["POST_UNTIL_NORM"], errors="coerce")
 
-    # Filter payroll for 2024 or 2025
     payroll = payroll[payroll["FISCAL_YEAR"].isin([2024, 2025])]
 
-    # Filter weekly postings for 2024–2025 based on POSTING_DATE_NORM
     weekly = weekly[(weekly["POSTING_DATE_NORM"].dt.year >= 2024) & (weekly["POSTING_DATE_NORM"].dt.year <= 2025)]
 
-    # Calculate posting duration
     weekly["POSTING_DURATION"] = (weekly["POST_UNTIL_NORM"] - weekly["POSTING_DATE_NORM"]).dt.days
     
-    # Fuzzy match and enrich
     enriched_postings = fuzzy_enrich_postings(weekly, payroll, min_ratio=85)
     enriched_postings = enriched_postings[
         (enriched_postings["MATCH_SCORE"].notna()) &
         (enriched_postings["MATCH_SCORE"] >= 85)
     ]
-    # Write to Snowflake GOLD schema
     write_to_snowflake(conn, enriched_postings, "NYC_JOB_POSTINGS_PAYROLL_MATCHES", GOLD_SCHEMA)
 
 
