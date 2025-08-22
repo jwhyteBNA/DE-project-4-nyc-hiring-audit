@@ -145,11 +145,17 @@ def main():
     weekly["POSTING_DATE_NORM"] = pd.to_datetime(weekly["POSTING_DATE_NORM"], errors="coerce")
     weekly["POST_UNTIL_NORM"] = pd.to_datetime(weekly["POST_UNTIL_NORM"], errors="coerce")
 
+    weekly["POSTING_DURATION"] = (weekly["POST_UNTIL_NORM"] - weekly["POSTING_DATE_NORM"]).dt.days
+
+    weekly = weekly[
+        (weekly["POSTING_DATE_NORM"].dt.year >= 2024) & 
+        (weekly["POSTING_DATE_NORM"].dt.year <= 2025) &
+        (weekly["POSTING_DURATION"] >= 0) &
+        (weekly["POSTING_DURATION"] <= 365)
+]
+
     payroll = payroll[payroll["FISCAL_YEAR"].isin([2024, 2025])]
 
-    weekly = weekly[(weekly["POSTING_DATE_NORM"].dt.year >= 2024) & (weekly["POSTING_DATE_NORM"].dt.year <= 2025)]
-
-    weekly["POSTING_DURATION"] = (weekly["POST_UNTIL_NORM"] - weekly["POSTING_DATE_NORM"]).dt.days
     
     enriched_postings = fuzzy_enrich_postings(weekly, payroll, min_ratio=85)
     enriched_postings = enriched_postings[
